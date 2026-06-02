@@ -54,7 +54,7 @@ def call_ccusage(*args: str) -> dict[str, Any]:
 
 def load_config() -> dict[str, Any]:
     """Load reporter configuration from config.json."""
-    with CONFIG_PATH.open(encoding="utf-8") as config_file:
+    with CONFIG_PATH.open(encoding="utf-8-sig") as config_file:
         return json.load(config_file)
 
 
