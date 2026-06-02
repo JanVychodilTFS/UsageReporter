@@ -15,10 +15,10 @@ From a local checkout:
 .\install.ps1
 ```
 
-One-line GitHub install, after updating `install.ps1` with the real repo URL:
+One-line GitHub install:
 
 ```powershell
-irm https://raw.githubusercontent.com/OWNER/REPO/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/JanVychodilTFS/UsageReporter/main/install.ps1 | iex
 ```
 
 The installer asks for email, target URL, install path, and schedule. It creates a Windows Scheduled Task and writes logs to:

@@ -1,5 +1,5 @@
 param(
-    [string]$SourceBaseUrl = 'https://raw.githubusercontent.com/OWNER/REPO/main',
+    [string]$SourceBaseUrl = 'https://raw.githubusercontent.com/JanVychodilTFS/UsageReporter/main',
     [string]$TaskName = 'UsageReporter'
 )
 
@@ -219,10 +219,6 @@ function Install-ProjectFile {
 
         Copy-Item -LiteralPath $localSource -Destination $destination -Force
         return
-    }
-
-    if ($SourceBaseUrl -match 'OWNER/REPO') {
-        throw 'SourceBaseUrl still contains OWNER/REPO placeholder. Update install.ps1 before one-line GitHub installation.'
     }
 
     $sourceUrl = $SourceBaseUrl.TrimEnd('/') + '/' + $FileName
