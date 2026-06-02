@@ -40,3 +40,17 @@ Send data to the configured target:
 ```powershell
 python run.py
 ```
+
+## Uninstall
+
+From a local checkout:
+
+```powershell
+.\uninstall.ps1
+```
+
+One-line GitHub uninstall:
+
+```powershell
+irm https://raw.githubusercontent.com/JanVychodilTFS/UsageReporter/main/uninstall.ps1 | iex
+```
