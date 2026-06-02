@@ -1,0 +1,16 @@
+# Sensitive configuration (contains email and signed API URL)
+config.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# VS Code
+.vscode/
