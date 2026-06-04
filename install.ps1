@@ -7,7 +7,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $DefaultInstallPath = Join-Path $env:LOCALAPPDATA 'UsageReporter'
-$ProjectFiles = @('usage_reporter.py', 'run.py', 'test.py')
+$InstallPathEnvVarName = 'USAGE_REPORTER_INSTALL_PATH'
+$ProjectFiles = @('usage_reporter.py', 'run.py', 'test.py', 'uninstall.ps1')
 
 function Assert-CommandExists {
     param([string]$Name)
@@ -225,6 +226,16 @@ function Install-ProjectFile {
     Invoke-WebRequest -Uri $sourceUrl -OutFile $destination
 }
 
+function Set-InstallPathEnvironmentVariable {
+    param(
+        [string]$Name,
+        [string]$InstallPath
+    )
+
+    [Environment]::SetEnvironmentVariable($Name, $InstallPath, 'User')
+    Set-Item -Path "Env:$Name" -Value $InstallPath
+}
+
 function Get-DefaultAutomationData {
     param($SourceConfig)
 
@@ -397,9 +408,14 @@ function Main {
         }
     }
 
+    Set-InstallPathEnvironmentVariable `
+        -Name $InstallPathEnvVarName `
+        -InstallPath $installPath
+
     Write-Host ''
     Write-Host 'Installation complete.'
     Write-Host "Install path: $installPath"
+    Write-Host "Install path env var: $InstallPathEnvVarName"
     Write-Host "Config path: $configPath"
     Write-Host "Log path: $(Join-Path $installPath 'logs\run.log')"
     Write-Host "Manual run: python `"$((Join-Path $installPath 'run.py'))`""

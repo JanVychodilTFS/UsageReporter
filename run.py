@@ -32,9 +32,14 @@ def main() -> None:
     print(response_text)
 
 
+def build_payload(data: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Wrap report rows in the object shape expected by the target flow."""
+    return {"data": data}
+
+
 def send_to_target(target_url: str, data: list[dict[str, Any]]) -> str:
     """Send usage report data to any target that accepts JSON POST requests."""
-    body = json.dumps(data).encode("utf-8")
+    body = json.dumps(build_payload(data)).encode("utf-8")
     target_request = request.Request(
         target_url,
         data=body,

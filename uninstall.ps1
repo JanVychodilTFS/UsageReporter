@@ -1,10 +1,13 @@
 param(
     [string]$TaskName = 'UsageReporter',
-    [string]$InstallPath = "$env:LOCALAPPDATA\UsageReporter"
+    [string]$InstallPath = ''
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$InstallPathEnvVarName = 'USAGE_REPORTER_INSTALL_PATH'
+$DefaultInstallPath = Join-Path $env:LOCALAPPDATA 'UsageReporter'
 
 function Read-YesNo {
     param(
@@ -31,6 +34,77 @@ function Read-YesNo {
     }
 }
 
+function Resolve-InstallPath {
+    param(
+        [string]$InstallPath,
+        [string]$EnvVarName
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($InstallPath)) {
+        return [System.IO.Path]::GetFullPath(
+            [Environment]::ExpandEnvironmentVariables($InstallPath)
+        )
+    }
+
+    $storedInstallPath = [Environment]::GetEnvironmentVariable($EnvVarName, 'User')
+    if ([string]::IsNullOrWhiteSpace($storedInstallPath)) {
+        $storedInstallPath = [Environment]::GetEnvironmentVariable($EnvVarName, 'Process')
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($storedInstallPath)) {
+        return [System.IO.Path]::GetFullPath(
+            [Environment]::ExpandEnvironmentVariables($storedInstallPath)
+        )
+    }
+
+    return [System.IO.Path]::GetFullPath(
+        [Environment]::ExpandEnvironmentVariables($DefaultInstallPath)
+    )
+}
+
+function Remove-InstallPathEnvironmentVariable {
+    param([string]$Name)
+
+    if ($null -ne [Environment]::GetEnvironmentVariable($Name, 'User')) {
+        [Environment]::SetEnvironmentVariable($Name, $null, 'User')
+    }
+
+    if (Test-Path -LiteralPath "Env:$Name") {
+        Remove-Item -LiteralPath "Env:$Name" -ErrorAction SilentlyContinue
+    }
+}
+
+function Test-PathIsInDirectory {
+    param(
+        [string]$Path,
+        [string]$Directory
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+    $fullDirectory = [System.IO.Path]::GetFullPath($Directory).TrimEnd(
+        [System.IO.Path]::DirectorySeparatorChar,
+        [System.IO.Path]::AltDirectorySeparatorChar
+    )
+
+    return $fullPath.Equals($fullDirectory, [System.StringComparison]::OrdinalIgnoreCase) -or
+        $fullPath.StartsWith(
+            $fullDirectory + [System.IO.Path]::DirectorySeparatorChar,
+            [System.StringComparison]::OrdinalIgnoreCase
+        )
+}
+
+function Move-OutOfInstallPath {
+    param([string]$InstallPath)
+
+    $currentPath = (Get-Location).ProviderPath
+    if ($currentPath -and (Test-PathIsInDirectory -Path $currentPath -Directory $InstallPath)) {
+        Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
+    }
+}
+
 function Main {
     $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     if ($task) {
@@ -41,9 +115,14 @@ function Main {
         Write-Host "Scheduled task '$TaskName' was not found."
     }
 
-    $expandedInstallPath = [Environment]::ExpandEnvironmentVariables($InstallPath)
+    $expandedInstallPath = Resolve-InstallPath `
+        -InstallPath $InstallPath `
+        -EnvVarName $InstallPathEnvVarName
+
     if (-not (Test-Path -LiteralPath $expandedInstallPath)) {
         Write-Host "Install folder not found: $expandedInstallPath"
+        Remove-InstallPathEnvironmentVariable -Name $InstallPathEnvVarName
+        Write-Host "Install path environment variable '$InstallPathEnvVarName' removed."
         return
     }
 
@@ -52,12 +131,16 @@ function Main {
         -Default $false
 
     if ($removeFiles) {
+        Move-OutOfInstallPath -InstallPath $expandedInstallPath
         Remove-Item -LiteralPath $expandedInstallPath -Recurse -Force
         Write-Host "Install folder removed: $expandedInstallPath"
     }
     else {
         Write-Host "Installed files kept: $expandedInstallPath"
     }
+
+    Remove-InstallPathEnvironmentVariable -Name $InstallPathEnvVarName
+    Write-Host "Install path environment variable '$InstallPathEnvVarName' removed."
 }
 
 Main

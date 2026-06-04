@@ -27,9 +27,11 @@ The installer asks for email, target URL, install path, and schedule. It creates
 %LOCALAPPDATA%\UsageReporter\logs\run.log
 ```
 
+The selected install path is stored in the user environment variable `USAGE_REPORTER_INSTALL_PATH` so uninstall can find custom install locations.
+
 ## Test
 
-Print configured data without sending:
+Print the configured JSON payload without sending:
 
 ```powershell
 python test.py
@@ -44,6 +46,12 @@ python run.py
 ## Uninstall
 
 From a local checkout:
+
+```powershell
+.\uninstall.ps1
+```
+
+From the install folder:
 
 ```powershell
 .\uninstall.ps1

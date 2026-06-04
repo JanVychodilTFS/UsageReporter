@@ -16,6 +16,7 @@ class QueryType(str, Enum):
     """Supported usage report queries."""
 
     LAST_WEEK = "lastWeek"
+    YESTERDAY = "yesterday"
     YESTERDAY_SESSIONS = "yesterdaySessions"
 
 
@@ -28,6 +29,7 @@ class Agent(str, Enum):
 class SampleType(str, Enum):
     """Supported reporting sample types."""
 
+    DAILY = "daily"
     SESSION = "session"
     WEEKLY = "weekly"
 
@@ -88,6 +90,38 @@ def get_last_week_data(agent: Agent) -> dict[str, Any]:
     }
 
 
+def get_yesterday_data(agent: Agent) -> dict[str, Any]:
+    """Return one summarized Codex usage row for yesterday."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    raw_data = call_ccusage(
+        agent.value,
+        "daily",
+        "--since",
+        yesterday,
+        "--until",
+        yesterday,
+    )
+    config = load_config()
+    models: set[str] = set()
+
+    for row in raw_data.get("daily", []):
+        row_models = row.get("models", {})
+        if isinstance(row_models, dict):
+            models.update(row_models)
+
+    totals = dict(raw_data.get("totals", {}))
+    round_cost(totals)
+
+    return {
+        "user": config["UserEmail"],
+        "agent": agent.value,
+        "sample": SampleType.DAILY.value,
+        "date": yesterday,
+        "models": sorted(models),
+        **totals,
+    }
+
+
 def get_yesterday_sessions_data(agent: Agent) -> list[dict[str, Any]]:
     """Return one summarized usage row for each Codex session yesterday."""
     since = (date.today() - timedelta(days=1)).isoformat()
@@ -127,6 +161,8 @@ def get_data(agent: Agent, query_type: QueryType) -> list[dict[str, Any]]:
     """Return usage data for the requested agent and query type."""
     if query_type == QueryType.LAST_WEEK:
         return [get_last_week_data(agent)]
+    if query_type == QueryType.YESTERDAY:
+        return [get_yesterday_data(agent)]
     if query_type == QueryType.YESTERDAY_SESSIONS:
         return get_yesterday_sessions_data(agent)
 

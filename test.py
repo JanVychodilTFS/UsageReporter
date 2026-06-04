@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from run import build_payload
 from usage_reporter import Agent
 from usage_reporter import QueryType
 from usage_reporter import get_data
@@ -31,7 +32,7 @@ def test_automation() -> None:
         result = get_data(agent, query_type)
         results.extend(result)
 
-    print(json.dumps(results, indent=2))
+    print(json.dumps(build_payload(results), indent=2))
 
 
 if __name__ == "__main__":
