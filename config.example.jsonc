@@ -3,6 +3,10 @@
   "UserEmail": "your.email@example.com",
   // Where the tool is installed; %LOCALAPPDATA% expands to C:\Users\<you>\AppData\Local
   "InstallationPath": "%LOCALAPPDATA%\\UsageReporter",
+  // Codex settings directory used by ccusage; %USERPROFILE% avoids hardcoding a user name.
+  "CodexSettingsPath": "%USERPROFILE%\\.codex",
+  // Include archived Codex sessions by setting CODEX_HOME only for the ccusage subprocess.
+  "ReadArchivedSessions": false,
   "Automation": 
   {
     "Enabled": true,

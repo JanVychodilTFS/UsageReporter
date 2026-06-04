@@ -6,6 +6,7 @@ from datetime import date
 from datetime import timedelta
 from enum import Enum
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -48,6 +49,7 @@ def call_ccusage(*args: str) -> dict[str, Any]:
         command,
         check=True,
         capture_output=True,
+        env=build_ccusage_environment(load_config()),
         text=True,
     )
 
@@ -58,6 +60,20 @@ def load_config() -> dict[str, Any]:
     """Load reporter configuration from config.json."""
     with CONFIG_PATH.open(encoding="utf-8-sig") as config_file:
         return json.load(config_file)
+
+
+def build_ccusage_environment(config: dict[str, Any]) -> dict[str, str]:
+    """Return a subprocess environment for ccusage."""
+    env = os.environ.copy()
+    if not config.get("ReadArchivedSessions", False):
+        return env
+
+    raw_path = os.path.expandvars(os.path.expanduser(str(config.get("CodexSettingsPath"))))
+    codex_settings_path = Path(raw_path).resolve()
+    env["CODEX_HOME"] = (
+        f"{codex_settings_path},{codex_settings_path / "archived_sessions"}"
+    )
+    return env
 
 
 def get_last_week_data(agent: Agent) -> dict[str, Any]:
@@ -77,7 +93,7 @@ def get_last_week_data(agent: Agent) -> dict[str, Any]:
             models.update(row_models)
 
     totals = dict(raw_data.get("totals", {}))
-    round_cost(totals)
+    normalize_cost(totals)
 
     return {
         "user": config["UserEmail"],
@@ -110,7 +126,7 @@ def get_yesterday_data(agent: Agent) -> dict[str, Any]:
             models.update(row_models)
 
     totals = dict(raw_data.get("totals", {}))
-    round_cost(totals)
+    normalize_cost(totals)
 
     return {
         "user": config["UserEmail"],
@@ -132,7 +148,7 @@ def get_yesterday_sessions_data(agent: Agent) -> list[dict[str, Any]]:
 
     for session in raw_data.get("sessions", []):
         session_data = dict(session)
-        round_cost(session_data)
+        normalize_cost(session_data)
         session_data.pop("directory", None)
         session_data.pop("sessionFile", None)
         session_models = session.get("models", {})
@@ -151,8 +167,8 @@ def get_yesterday_sessions_data(agent: Agent) -> list[dict[str, Any]]:
     return rows
 
 
-def round_cost(data: dict[str, Any]) -> None:
-    """Round cost value in-place and normalize its field name."""
+def normalize_cost(data: dict[str, Any]) -> None:
+    """Normalize ccusage cost field in-place for API payload compatibility."""
     if "costUSD" in data:
         data["cost"] = round(data.pop("costUSD"), 2)
 

@@ -7,6 +7,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $DefaultInstallPath = Join-Path $env:LOCALAPPDATA 'UsageReporter'
+$DefaultCodexSettingsPath = '%USERPROFILE%\.codex'
 $InstallPathEnvVarName = 'USAGE_REPORTER_INSTALL_PATH'
 $ProjectFiles = @('usage_reporter.py', 'run.py', 'test.py', 'uninstall.ps1')
 
@@ -262,6 +263,8 @@ function Write-ReporterConfig {
         [string]$ConfigPath,
         [string]$UserEmail,
         [string]$InstallationPath,
+        [string]$CodexSettingsPath,
+        [bool]$ReadArchivedSessions,
         [bool]$AutomationEnabled,
         [string]$Schedule,
         [string]$TargetUrl,
@@ -271,6 +274,8 @@ function Write-ReporterConfig {
     $config = [ordered]@{
         UserEmail = $UserEmail
         InstallationPath = $InstallationPath
+        CodexSettingsPath = $CodexSettingsPath
+        ReadArchivedSessions = $ReadArchivedSessions
         Automation = [ordered]@{
             Enabled = $AutomationEnabled
             Schedule = $Schedule
@@ -360,6 +365,14 @@ function Main {
         -Object $sourceAutomation `
         -Name 'Enabled' `
         -Default $true)
+    $codexSettingsPath = Get-ObjectPropertyValue `
+        -Object $sourceConfig `
+        -Name 'CodexSettingsPath' `
+        -Default $DefaultCodexSettingsPath
+    $readArchivedSessions = [bool](Get-ObjectPropertyValue `
+        -Object $sourceConfig `
+        -Name 'ReadArchivedSessions' `
+        -Default $false)
 
     Write-Host ''
     Write-Host 'Configuration'
@@ -388,6 +401,8 @@ function Main {
         -ConfigPath $configPath `
         -UserEmail $userEmail `
         -InstallationPath $installPath `
+        -CodexSettingsPath $codexSettingsPath `
+        -ReadArchivedSessions $readArchivedSessions `
         -AutomationEnabled $automationEnabled `
         -Schedule $schedule `
         -TargetUrl $targetUrl `

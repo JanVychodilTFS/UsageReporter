@@ -4,35 +4,18 @@ from __future__ import annotations
 
 import json
 
-from run import build_payload
-from usage_reporter import Agent
-from usage_reporter import QueryType
-from usage_reporter import get_data
-from usage_reporter import load_config
+from run import ReportPayload
+from run import run_configured_report
 
 
 def main() -> None:
     """Run the test automation script."""
-    test_automation()
+    run_configured_report(format_payload)
 
 
-def test_automation() -> None:
-    """Run report calls defined in config.json Automation."""
-    config = load_config()
-    automation = config["Automation"]
-
-    if not automation["Enabled"]:
-        print("Automation is disabled.")
-        return
-
-    results = []
-    for data_request in automation["Data"]:
-        agent = Agent(data_request["Agent"])
-        query_type = QueryType(data_request["QueryType"])
-        result = get_data(agent, query_type)
-        results.extend(result)
-
-    print(json.dumps(build_payload(results), indent=2))
+def format_payload(_target_url: str, payload: ReportPayload) -> str:
+    """Format a report payload without sending it anywhere."""
+    return json.dumps(payload, indent=2)
 
 
 if __name__ == "__main__":

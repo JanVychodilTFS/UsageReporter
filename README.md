@@ -29,6 +29,8 @@ The installer asks for email, target URL, install path, and schedule. It creates
 
 The selected install path is stored in the user environment variable `USAGE_REPORTER_INSTALL_PATH` so uninstall can find custom install locations.
 
+Set `ReadArchivedSessions` to `true` in `config.json` to include archived Codex sessions. The reporter then sets `CODEX_HOME` only for the `ccusage` subprocess, using `CodexSettingsPath` and its `archived_sessions` folder.
+
 ## Test
 
 Print the configured JSON payload without sending:
