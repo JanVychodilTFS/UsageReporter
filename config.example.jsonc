@@ -6,11 +6,11 @@
   "Automation": 
   {
     "Enabled": true,
-    // Cron expression — default: every Monday at 06:00
+    // Cron expression - default: every Monday at 06:00
     "Schedule": "0 6 * * 1",
-    // HTTP POST endpoint that receives the JSON report array
+    // HTTP POST endpoint that receives {"data": [report rows]}
     "TargetURL": "https://your-target-url-here",
-    // Each entry produces one report; Agent: "codex" | QueryType: "lastWeek" | "yesterdaySessions"
+    // Each entry produces one report; Agent: "codex" | QueryType: "lastWeek" | "yesterday" | "yesterdaySessions"
     "Data": [
       {
         "Agent": "codex",
