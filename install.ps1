@@ -249,7 +249,7 @@ function Get-DefaultAutomationData {
     return @(
         [ordered]@{
             Agent = 'codex'
-            QueryType = 'yesterday'
+            QueryType = 'yesterdayWorkWeek'
         }
     )
 }
@@ -522,7 +522,7 @@ function Main {
     }
     else {
         $setupDefaultJob = Read-YesNo `
-            -Prompt "Set up the default 'daily_report' job (runs every day at 06:00 and reports yesterday's usage)" `
+            -Prompt "Set up the default 'daily_report' job (runs every day at 06:00 and reports the previous work day's usage)" `
             -Default $true
         $readArchivedSessions = Read-YesNo `
             -Prompt 'Read archived Codex sessions for default job' `

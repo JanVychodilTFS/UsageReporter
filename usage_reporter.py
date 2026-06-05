@@ -21,6 +21,7 @@ class QueryType(str, Enum):
     LAST_WORK_WEEK_DAILY = "lastWorkWeekDaily"
     YESTERDAY = "yesterday"
     YESTERDAY_SESSIONS = "yesterdaySessions"
+    YESTERDAY_WORK_WEEK = "yesterdayWorkWeek"
 
 
 class Agent(str, Enum):
@@ -54,6 +55,8 @@ class UsageReporter:
             return [self._get_yesterday_data(agent)]
         if query_type == QueryType.YESTERDAY_SESSIONS:
             return self._get_yesterday_sessions_data(agent)
+        if query_type == QueryType.YESTERDAY_WORK_WEEK:
+            return [self._get_yesterday_work_week_data(agent)]
 
         raise ValueError(f"Unsupported query type: {query_type}")
 
@@ -132,6 +135,29 @@ class UsageReporter:
             "agent": agent.value,
             "sample": SampleType.DAILY.value,
             "date": yesterday,
+            "models": self._extract_models(raw_data.get("daily", [])),
+            **totals,
+        }
+
+    def _get_yesterday_work_week_data(self, agent: Agent) -> dict[str, Any]:
+        """Return one summarized usage row for the previous work day.
+
+        Behaves like the yesterday query, but rolls weekend days back to the
+        preceding Friday (e.g. on Monday it reports Friday's usage).
+        """
+        previous_work_day = self._get_previous_work_day().isoformat()
+        raw_data = self._call_ccusage(
+            agent.value, "daily", "--since", previous_work_day, "--until", previous_work_day
+        )
+
+        totals = dict(raw_data.get("totals", {}))
+        self._normalize_cost(totals)
+
+        return {
+            "user": self.config["UserEmail"],
+            "agent": agent.value,
+            "sample": SampleType.DAILY.value,
+            "date": previous_work_day,
             "models": self._extract_models(raw_data.get("daily", [])),
             **totals,
         }
@@ -215,6 +241,14 @@ class UsageReporter:
             results.append(row)
 
         return results
+
+    @staticmethod
+    def _get_previous_work_day() -> date:
+        """Return the most recent weekday before today, skipping weekends."""
+        day = date.today() - timedelta(days=1)
+        while day.weekday() >= 5:
+            day -= timedelta(days=1)
+        return day
 
     @staticmethod
     def _get_last_week_date_range() -> tuple[date, date]:

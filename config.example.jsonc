@@ -18,7 +18,7 @@
         "Schedule": "0 6 * * 1",
         // HTTP POST endpoint that receives {"jobId": "<Id>", "data": [report rows]}
         "TargetURL": "https://your-target-url-here",
-        // Agent: "codex" | QueryType: "lastWeek" | "lastWorkWeekDaily" | "yesterday" | "yesterdaySessions"
+        // Agent: "codex" | QueryType: "lastWeek" | "lastWorkWeekDaily" | "yesterday" | "yesterdaySessions" | "yesterdayWorkWeek"
         "Data": [
           {
             "Agent": "codex",
