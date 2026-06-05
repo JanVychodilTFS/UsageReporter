@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from datetime import date, timedelta
 from enum import Enum
 from numbers import Number
@@ -57,12 +58,26 @@ class UsageReporter:
         raise ValueError(f"Unsupported query type: {query_type}")
 
     def _call_ccusage(self, *args: str) -> dict[str, Any]:
-        """Run ccusage via npx and return parsed JSON output."""
-        executable = shutil.which("npx")
-        if executable is None:
-            raise FileNotFoundError("Could not find npx on PATH. Install Node.js to provide it.")
+        """Run ccusage and return parsed JSON output.
 
-        command = [executable, "--yes", "ccusage@latest", *args, "--json"]
+        Prefer a globally installed ccusage for speed, falling back to npx.
+        """
+        ccusage = shutil.which("ccusage")
+        if ccusage is not None:
+            command = [ccusage, *args, "--json"]
+        else:
+            npx = shutil.which("npx")
+            if npx is None:
+                raise FileNotFoundError(
+                    "Could not find ccusage or npx on PATH. Install ccusage, or install Node.js to provide npx."
+                )
+            print(
+                "Warning: ccusage is not installed; falling back to 'npx ccusage@latest', "
+                "which is slower. Install it globally with 'npm install -g ccusage'.",
+                file=sys.stderr,
+            )
+            command = [npx, "--yes", "ccusage@latest", *args, "--json"]
+
         result = subprocess.run(
             command,
             check=True,
