@@ -57,12 +57,12 @@ class UsageReporter:
         raise ValueError(f"Unsupported query type: {query_type}")
 
     def _call_ccusage(self, *args: str) -> dict[str, Any]:
-        """Run ccusage with the provided arguments and return parsed JSON output."""
-        executable = shutil.which("ccusage")
+        """Run ccusage via npx and return parsed JSON output."""
+        executable = shutil.which("npx")
         if executable is None:
-            raise FileNotFoundError("Could not find ccusage on PATH.")
+            raise FileNotFoundError("Could not find npx on PATH. Install Node.js to provide it.")
 
-        command = [executable, *args, "--json"]
+        command = [executable, "--yes", "ccusage@latest", *args, "--json"]
         result = subprocess.run(
             command,
             check=True,

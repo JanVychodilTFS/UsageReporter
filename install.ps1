@@ -444,7 +444,7 @@ function Sync-ReporterTasks {
 function Main {
     Write-Host 'Checking prerequisites...'
     Assert-CommandExists -Name 'python'
-    Assert-CommandExists -Name 'ccusage'
+    Assert-CommandExists -Name 'npx'
 
     $sourceConfigPath = if ([string]::IsNullOrWhiteSpace($PSScriptRoot)) {
         $null
