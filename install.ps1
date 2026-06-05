@@ -375,7 +375,7 @@ function Register-ReporterTask {
     $taskCommand = "& { Set-Location -LiteralPath $installPathLiteral; python $runScriptLiteral $jobIdLiteral *>> $logPathLiteral }"
     $action = New-ScheduledTaskAction `
         -Execute 'powershell.exe' `
-        -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"$taskCommand`""
+        -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command `"$taskCommand`""
     $settings = New-ScheduledTaskSettingsSet `
         -StartWhenAvailable `
         -AllowStartIfOnBatteries `
@@ -383,7 +383,7 @@ function Register-ReporterTask {
     $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
     $principal = New-ScheduledTaskPrincipal `
         -UserId $currentUser `
-        -LogonType Interactive `
+        -LogonType S4U `
         -RunLevel Limited
 
     Register-ScheduledTask `
