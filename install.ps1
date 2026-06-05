@@ -514,7 +514,7 @@ function Main {
     }
     else {
         $setupDefaultJob = Read-YesNo `
-            -Prompt "Set up the default 'daily_report' job (runs every day at 18:00 and reports yesterday's usage)" `
+            -Prompt "Set up the default 'daily_report' job (runs every day at 06:00 and reports yesterday's usage)" `
             -Default $true
         $readArchivedSessions = Read-YesNo `
             -Prompt 'Read archived Codex sessions for default job' `
@@ -525,7 +525,7 @@ function Main {
             New-DefaultAutomationJob `
                 -Enabled $setupDefaultJob `
                 -ReadArchivedSessions $readArchivedSessions `
-                -Schedule '0 18 * * *' `
+                -Schedule '0 6 * * *' `
                 -TargetUrl $targetUrl `
                 -Data $automationData
         )
