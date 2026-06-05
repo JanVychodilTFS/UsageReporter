@@ -19,8 +19,6 @@ One-line GitHub install:
 irm https://raw.githubusercontent.com/JanVychodilTFS/UsageReporter/main/install.ps1 | iex
 ```
 
-Asks for email, install path, target URL, and archived-sessions flag. Creates one scheduled task per enabled job. Logs: `%LOCALAPPDATA%\UsageReporter\logs\run-<job-id>.log`.
-
 ## Config
 
 Jobs live in `Automation.Jobs` in `config.json`. Each enabled job becomes a scheduled task `UsageReporter-<Id>` running `run.py <Id>`. Stale tasks are removed on re-install.
