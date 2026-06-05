@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import json
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from urllib import request
 
-from usage_reporter import Agent
-from usage_reporter import QueryType
-from usage_reporter import get_data
-from usage_reporter import load_config
+from usage_reporter import Agent, QueryType, UsageReporter
 
 ReportPayload = dict[str, list[dict[str, Any]]]
 ReportOutputHandler = Callable[[str, ReportPayload], str]
+
+CONFIG_PATH = Path(__file__).with_name("config.json")
+
+
+def load_config() -> dict[str, Any]:
+    """Load reporter configuration from config.json."""
+    with CONFIG_PATH.open(encoding="utf-8-sig") as config_file:
+        return json.load(config_file)
 
 
 def main() -> None:
@@ -30,18 +36,19 @@ def run_configured_report(output_handler: ReportOutputHandler) -> None:
         print("Automation is disabled.")
         return
 
-    payload = build_payload(collect_report_data(automation))
+    payload = build_payload(collect_report_data(config))
     output_text = output_handler(automation["TargetURL"], payload)
     print(output_text)
 
 
-def collect_report_data(automation: dict[str, Any]) -> list[dict[str, Any]]:
+def collect_report_data(config: dict[str, Any]) -> list[dict[str, Any]]:
     """Collect usage rows for every configured automation data request."""
+    reporter = UsageReporter(config)
     results = []
-    for data_request in automation["Data"]:
+    for data_request in config["Automation"]["Data"]:
         agent = Agent(data_request["Agent"])
         query_type = QueryType(data_request["QueryType"])
-        result = get_data(agent, query_type)
+        result = reporter.get_data(agent, query_type)
         results.extend(result)
 
     return results

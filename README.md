@@ -31,6 +31,13 @@ The selected install path is stored in the user environment variable `USAGE_REPO
 
 Set `ReadArchivedSessions` to `true` in `config.json` to include archived Codex sessions. The reporter then sets `CODEX_HOME` only for the `ccusage` subprocess, using `CodexSettingsPath` and its `archived_sessions` folder.
 
+## Query Types
+
+- `lastWeek`: one weekly summary row for the previous Monday through Sunday.
+- `lastWorkWeekDaily`: five daily rows for the previous Monday through Friday, with Saturday and Sunday usage added to Friday.
+- `yesterday`: one daily summary row for yesterday.
+- `yesterdaySessions`: one row for each session from yesterday.
+
 ## Test
 
 Print the configured JSON payload without sending:
