@@ -289,7 +289,7 @@ function New-DefaultAutomationJob {
         ReadArchivedSessions = $ReadArchivedSessions
         Schedule = $Schedule
         TargetURL = $TargetUrl
-        Data = $Data
+        Data = @($Data)
     }
 }
 
