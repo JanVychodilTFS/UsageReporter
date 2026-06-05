@@ -40,6 +40,14 @@ function Get-ObjectPropertyValue {
         return $Default
     }
 
+    if ($Object -is [System.Collections.IDictionary]) {
+        if ($Object.Contains($Name)) {
+            return $Object[$Name]
+        }
+
+        return $Default
+    }
+
     $property = $Object.PSObject.Properties[$Name]
     if ($null -eq $property) {
         return $Default
