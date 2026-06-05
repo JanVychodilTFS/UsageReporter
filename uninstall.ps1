@@ -105,15 +105,28 @@ function Move-OutOfInstallPath {
     }
 }
 
-function Main {
-    $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-    if ($task) {
+function Remove-ReporterTasks {
+    param([string]$TaskName)
+
+    $legacyTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($legacyTask) {
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
         Write-Host "Scheduled task '$TaskName' removed."
     }
-    else {
+
+    $jobTasks = @(Get-ScheduledTask -TaskName "$TaskName-*" -ErrorAction SilentlyContinue)
+    foreach ($task in $jobTasks) {
+        Unregister-ScheduledTask -TaskName $task.TaskName -Confirm:$false
+        Write-Host "Scheduled task '$($task.TaskName)' removed."
+    }
+
+    if (-not $legacyTask -and $jobTasks.Count -eq 0) {
         Write-Host "Scheduled task '$TaskName' was not found."
     }
+}
+
+function Main {
+    Remove-ReporterTasks -TaskName $TaskName
 
     $expandedInstallPath = Resolve-InstallPath `
         -InstallPath $InstallPath `

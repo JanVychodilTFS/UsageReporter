@@ -5,20 +5,40 @@
   "InstallationPath": "%LOCALAPPDATA%\\UsageReporter",
   // Codex settings directory used by ccusage; %USERPROFILE% avoids hardcoding a user name.
   "CodexSettingsPath": "%USERPROFILE%\\.codex",
-  // Include archived Codex sessions by setting CODEX_HOME only for the ccusage subprocess.
-  "ReadArchivedSessions": false,
   "Automation": 
   {
-    "Enabled": true,
-    // Cron expression - default: every Monday at 06:00
-    "Schedule": "0 6 * * 1",
-    // HTTP POST endpoint that receives {"data": [report rows]}
-    "TargetURL": "https://your-target-url-here",
-    // Each entry produces one report; Agent: "codex" | QueryType: "lastWeek" | "lastWorkWeekDaily" | "yesterday" | "yesterdaySessions"
-    "Data": [
+    // Each job becomes a Windows Scheduled Task named UsageReporter-<Id>.
+    "Jobs": [
       {
-        "Agent": "codex",
-        "QueryType": "lastWeek"
+        "Id": "weekly-summary",
+        "Enabled": true,
+        // Include archived Codex sessions by setting CODEX_HOME only for this job's ccusage subprocess.
+        "ReadArchivedSessions": false,
+        // Cron expression - every Monday at 06:00
+        "Schedule": "0 6 * * 1",
+        // HTTP POST endpoint that receives {"jobId": "<Id>", "data": [report rows]}
+        "TargetURL": "https://your-target-url-here",
+        // Agent: "codex" | QueryType: "lastWeek" | "lastWorkWeekDaily" | "yesterday" | "yesterdaySessions"
+        "Data": [
+          {
+            "Agent": "codex",
+            "QueryType": "lastWeek"
+          }
+        ]
+      },
+      {
+        "Id": "daily-sessions",
+        "Enabled": true,
+        "ReadArchivedSessions": false,
+        // Cron expression - every day at 07:00
+        "Schedule": "0 7 * * *",
+        "TargetURL": "https://your-target-url-here",
+        "Data": [
+          {
+            "Agent": "codex",
+            "QueryType": "yesterdaySessions"
+          }
+        ]
       }
     ]
   }

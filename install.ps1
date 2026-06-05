@@ -238,24 +238,92 @@ function Set-InstallPathEnvironmentVariable {
 }
 
 function Get-DefaultAutomationData {
-    param($SourceConfig)
-
-    $automation = Get-ObjectPropertyValue -Object $SourceConfig -Name 'Automation'
-    $data = Get-ObjectPropertyValue -Object $automation -Name 'Data'
-    if ($data) {
-        return $data
-    }
-
     return @(
         [ordered]@{
             Agent = 'codex'
-            QueryType = 'lastWeek'
-        },
-        [ordered]@{
-            Agent = 'codex'
-            QueryType = 'yesterdaySessions'
+            QueryType = 'yesterday'
         }
     )
+}
+
+function Test-HasAutomationJobs {
+    param($Config)
+
+    $automation = Get-ObjectPropertyValue -Object $Config -Name 'Automation'
+    $jobs = Get-ObjectPropertyValue -Object $automation -Name 'Jobs'
+    return $null -ne $jobs -and @($jobs).Count -gt 0
+}
+
+function Get-AutomationJobsFromConfig {
+    param($Config)
+
+    $automation = Get-ObjectPropertyValue -Object $Config -Name 'Automation'
+    $jobs = Get-ObjectPropertyValue -Object $automation -Name 'Jobs'
+    if ($null -eq $jobs -or @($jobs).Count -eq 0) {
+        throw 'Automation.Jobs must define at least one job.'
+    }
+
+    return @($jobs)
+}
+
+function New-DefaultAutomationJob {
+    param(
+        [bool]$Enabled,
+        [bool]$ReadArchivedSessions,
+        [string]$Schedule,
+        [string]$TargetUrl,
+        $Data
+    )
+
+    return [ordered]@{
+        Id = 'daily_report'
+        Enabled = $Enabled
+        ReadArchivedSessions = $ReadArchivedSessions
+        Schedule = $Schedule
+        TargetURL = $TargetUrl
+        Data = $Data
+    }
+}
+
+function Assert-AutomationJob {
+    param($Job)
+
+    $jobId = Get-ObjectPropertyValue -Object $Job -Name 'Id'
+    $enabled = Get-ObjectPropertyValue -Object $Job -Name 'Enabled'
+    $readArchivedSessions = Get-ObjectPropertyValue -Object $Job -Name 'ReadArchivedSessions'
+    $schedule = Get-ObjectPropertyValue -Object $Job -Name 'Schedule'
+    $targetUrl = Get-ObjectPropertyValue -Object $Job -Name 'TargetURL'
+    $data = Get-ObjectPropertyValue -Object $Job -Name 'Data'
+
+    if ([string]::IsNullOrWhiteSpace($jobId)) {
+        throw 'Automation job is missing Id.'
+    }
+
+    if ($jobId -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]*$') {
+        throw "Automation job '$jobId' has an invalid Id. Use letters, numbers, underscores, or hyphens."
+    }
+
+    if ($enabled -isnot [bool]) {
+        throw "Automation job '$jobId' is missing boolean Enabled."
+    }
+
+    if ($readArchivedSessions -isnot [bool]) {
+        throw "Automation job '$jobId' is missing boolean ReadArchivedSessions."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($schedule)) {
+        throw "Automation job '$jobId' is missing Schedule."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($targetUrl)) {
+        throw "Automation job '$jobId' is missing TargetURL."
+    }
+
+    if ($null -eq $data -or @($data).Count -eq 0) {
+        throw "Automation job '$jobId' must define at least one Data entry."
+    }
+
+    New-TriggerFromCronSchedule -Schedule $schedule | Out-Null
 }
 
 function Write-ReporterConfig {
@@ -264,23 +332,15 @@ function Write-ReporterConfig {
         [string]$UserEmail,
         [string]$InstallationPath,
         [string]$CodexSettingsPath,
-        [bool]$ReadArchivedSessions,
-        [bool]$AutomationEnabled,
-        [string]$Schedule,
-        [string]$TargetUrl,
-        $Data
+        $Jobs
     )
 
     $config = [ordered]@{
         UserEmail = $UserEmail
         InstallationPath = $InstallationPath
         CodexSettingsPath = $CodexSettingsPath
-        ReadArchivedSessions = $ReadArchivedSessions
         Automation = [ordered]@{
-            Enabled = $AutomationEnabled
-            Schedule = $Schedule
-            TargetURL = $TargetUrl
-            Data = $Data
+            Jobs = @($Jobs)
         }
     }
 
@@ -292,17 +352,19 @@ function Write-ReporterConfig {
 function Register-ReporterTask {
     param(
         [string]$TaskName,
+        [string]$JobId,
         [string]$InstallPath,
         [string]$Schedule
     )
 
     $trigger = New-TriggerFromCronSchedule -Schedule $Schedule
-    $logPath = Join-Path $InstallPath 'logs\run.log'
+    $logPath = Join-Path $InstallPath "logs\run-$JobId.log"
     $runScriptPath = Join-Path $InstallPath 'run.py'
     $installPathLiteral = ConvertTo-PowerShellStringLiteral -Value $InstallPath
     $runScriptLiteral = ConvertTo-PowerShellStringLiteral -Value $runScriptPath
+    $jobIdLiteral = ConvertTo-PowerShellStringLiteral -Value $JobId
     $logPathLiteral = ConvertTo-PowerShellStringLiteral -Value $logPath
-    $taskCommand = "& { Set-Location -LiteralPath $installPathLiteral; python $runScriptLiteral *>> $logPathLiteral }"
+    $taskCommand = "& { Set-Location -LiteralPath $installPathLiteral; python $runScriptLiteral $jobIdLiteral *>> $logPathLiteral }"
     $action = New-ScheduledTaskAction `
         -Execute 'powershell.exe' `
         -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"$taskCommand`""
@@ -326,6 +388,59 @@ function Register-ReporterTask {
         -Force | Out-Null
 }
 
+function Get-ReporterTaskName {
+    param(
+        [string]$TaskName,
+        [string]$JobId
+    )
+
+    return "$TaskName-$JobId"
+}
+
+function Sync-ReporterTasks {
+    param(
+        [string]$TaskName,
+        [string]$InstallPath,
+        $Jobs
+    )
+
+    $expectedTaskNames = @{}
+
+    foreach ($job in @($Jobs)) {
+        $jobId = Get-ObjectPropertyValue -Object $job -Name 'Id'
+        $enabled = Get-ObjectPropertyValue -Object $job -Name 'Enabled'
+        $schedule = Get-ObjectPropertyValue -Object $job -Name 'Schedule'
+        $jobTaskName = Get-ReporterTaskName -TaskName $TaskName -JobId $jobId
+
+        if (-not $enabled) {
+            Write-Host "Scheduled task '$jobTaskName' skipped because the job is disabled."
+            continue
+        }
+
+        $expectedTaskNames[$jobTaskName] = $true
+
+        Register-ReporterTask `
+            -TaskName $jobTaskName `
+            -JobId $jobId `
+            -InstallPath $InstallPath `
+            -Schedule $schedule
+        Write-Host "Scheduled task '$jobTaskName' has been registered."
+    }
+
+    $legacyTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    if ($legacyTask) {
+        Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+        Write-Host "Old scheduled task '$TaskName' removed."
+    }
+
+    foreach ($task in @(Get-ScheduledTask -TaskName "$TaskName-*" -ErrorAction SilentlyContinue)) {
+        if (-not $expectedTaskNames.ContainsKey($task.TaskName)) {
+            Unregister-ScheduledTask -TaskName $task.TaskName -Confirm:$false
+            Write-Host "Stale scheduled task '$($task.TaskName)' removed."
+        }
+    }
+}
+
 function Main {
     Write-Host 'Checking prerequisites...'
     Assert-CommandExists -Name 'python'
@@ -339,52 +454,88 @@ function Main {
     }
     $sourceConfig = if ($sourceConfigPath) { Read-JsonFile -Path $sourceConfigPath } else { $null }
 
-    $sourceAutomation = Get-ObjectPropertyValue -Object $sourceConfig -Name 'Automation'
-    $defaultEmail = Get-ObjectPropertyValue `
-        -Object $sourceConfig `
-        -Name 'UserEmail' `
-        -Default ''
+    # Detect an existing installation via the stored env var so a one-line install
+    # (no config.json beside the script) can still reuse the previous config.
+    $storedInstallPath = [Environment]::GetEnvironmentVariable($InstallPathEnvVarName, 'User')
+    $existingInstallConfig = $null
+    if (-not [string]::IsNullOrWhiteSpace($storedInstallPath)) {
+        $existingInstallPath = Expand-InstallPath -Path $storedInstallPath
+        $existingInstallConfig = Read-JsonFile -Path (Join-Path $existingInstallPath 'config.json')
+    }
+
     $defaultInstallationPath = Get-ObjectPropertyValue `
         -Object $sourceConfig `
-        -Name 'InstallationPath'
+        -Name 'InstallationPath' `
+        -Default (Get-ObjectPropertyValue -Object $existingInstallConfig -Name 'InstallationPath')
     $defaultInstallPath = if ($defaultInstallationPath) {
         Expand-InstallPath -Path $defaultInstallationPath
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($storedInstallPath)) {
+        Expand-InstallPath -Path $storedInstallPath
     }
     else {
         $DefaultInstallPath
     }
-    $defaultSchedule = Get-ObjectPropertyValue `
-        -Object $sourceAutomation `
-        -Name 'Schedule' `
-        -Default '0 6 * * 1'
-    $defaultTargetUrl = Get-ObjectPropertyValue `
-        -Object $sourceAutomation `
-        -Name 'TargetURL' `
-        -Default ''
-    $defaultAutomationEnabled = [bool](Get-ObjectPropertyValue `
-        -Object $sourceAutomation `
-        -Name 'Enabled' `
-        -Default $true)
-    $codexSettingsPath = Get-ObjectPropertyValue `
-        -Object $sourceConfig `
-        -Name 'CodexSettingsPath' `
-        -Default $DefaultCodexSettingsPath
-    $readArchivedSessions = [bool](Get-ObjectPropertyValue `
-        -Object $sourceConfig `
-        -Name 'ReadArchivedSessions' `
-        -Default $false)
 
     Write-Host ''
     Write-Host 'Configuration'
-    $userEmail = Read-Value -Prompt 'User email' -Default $defaultEmail
-    $targetUrl = Read-TargetUrl -Default $defaultTargetUrl
     $installPathInput = Read-Value -Prompt 'Installation path' -Default $defaultInstallPath
     $installPath = Expand-InstallPath -Path $installPathInput
-    $automationEnabled = Read-YesNo -Prompt 'Enable scheduled automation' -Default $defaultAutomationEnabled
-    $schedule = Read-Value -Prompt 'Schedule cron expression' -Default $defaultSchedule
-    $automationData = Get-DefaultAutomationData -SourceConfig $sourceConfig
+    $installedConfigPath = Join-Path $installPath 'config.json'
+    $installedConfig = Read-JsonFile -Path $installedConfigPath
+    $defaultConfig = if ($sourceConfig) {
+        $sourceConfig
+    }
+    elseif ($installedConfig) {
+        $installedConfig
+    }
+    elseif ($existingInstallConfig) {
+        $existingInstallConfig
+    }
+    else {
+        $null
+    }
 
-    New-TriggerFromCronSchedule -Schedule $schedule | Out-Null
+    $defaultEmail = Get-ObjectPropertyValue `
+        -Object $defaultConfig `
+        -Name 'UserEmail' `
+        -Default ''
+    $defaultTargetUrl = ''
+    $codexSettingsPath = Get-ObjectPropertyValue `
+        -Object $defaultConfig `
+        -Name 'CodexSettingsPath' `
+        -Default $DefaultCodexSettingsPath
+
+    $userEmail = Read-Value -Prompt 'User email' -Default $defaultEmail
+
+    if (Test-HasAutomationJobs -Config $defaultConfig) {
+        $automationJobs = Get-AutomationJobsFromConfig -Config $defaultConfig
+        Write-Host "Using $(@($automationJobs).Count) automation job(s) from config."
+    }
+    else {
+        $setupDefaultJob = Read-YesNo `
+            -Prompt "Set up the default 'daily_report' job (runs every day at 18:00 and reports yesterday's usage)" `
+            -Default $true
+        $readArchivedSessions = Read-YesNo `
+            -Prompt 'Read archived Codex sessions for default job' `
+            -Default $false
+        $targetUrl = Read-TargetUrl -Default $defaultTargetUrl
+        $automationData = Get-DefaultAutomationData
+        $automationJobs = @(
+            New-DefaultAutomationJob `
+                -Enabled $setupDefaultJob `
+                -ReadArchivedSessions $readArchivedSessions `
+                -Schedule '0 18 * * *' `
+                -TargetUrl $targetUrl `
+                -Data $automationData
+        )
+        Write-Host ''
+        Write-Host 'For more automation jobs or advanced configuration, edit the config file after installation.'
+    }
+
+    foreach ($job in @($automationJobs)) {
+        Assert-AutomationJob -Job $job
+    }
 
     New-Item -ItemType Directory -Path $installPath -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $installPath 'logs') -Force | Out-Null
@@ -402,26 +553,12 @@ function Main {
         -UserEmail $userEmail `
         -InstallationPath $installPath `
         -CodexSettingsPath $codexSettingsPath `
-        -ReadArchivedSessions $readArchivedSessions `
-        -AutomationEnabled $automationEnabled `
-        -Schedule $schedule `
-        -TargetUrl $targetUrl `
-        -Data $automationData
+        -Jobs $automationJobs
 
-    if ($automationEnabled) {
-        Register-ReporterTask `
-            -TaskName $TaskName `
-            -InstallPath $installPath `
-            -Schedule $schedule
-        Write-Host "Scheduled task '$TaskName' has been registered."
-    }
-    else {
-        $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-        if ($existingTask) {
-            Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
-            Write-Host "Scheduled task '$TaskName' was removed because automation is disabled."
-        }
-    }
+    Sync-ReporterTasks `
+        -TaskName $TaskName `
+        -InstallPath $installPath `
+        -Jobs $automationJobs
 
     Set-InstallPathEnvironmentVariable `
         -Name $InstallPathEnvVarName `
@@ -432,9 +569,9 @@ function Main {
     Write-Host "Install path: $installPath"
     Write-Host "Install path env var: $InstallPathEnvVarName"
     Write-Host "Config path: $configPath"
-    Write-Host "Log path: $(Join-Path $installPath 'logs\run.log')"
-    Write-Host "Manual run: python `"$((Join-Path $installPath 'run.py'))`""
-    Write-Host "Task check: Get-ScheduledTask -TaskName $TaskName"
+    Write-Host "Log path: $(Join-Path $installPath 'logs\run-<job-id>.log')"
+    Write-Host "Manual run: python `"$((Join-Path $installPath 'run.py'))`" <job-id> [<job-id> ...]"
+    Write-Host "Task check: Get-ScheduledTask -TaskName '$TaskName-*'"
 }
 
 Main
