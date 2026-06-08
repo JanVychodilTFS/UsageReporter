@@ -22,6 +22,7 @@ class QueryType(str, Enum):
     YESTERDAY = "yesterday"
     YESTERDAY_SESSIONS = "yesterdaySessions"
     YESTERDAY_WORK_WEEK = "yesterdayWorkWeek"
+    ROLLING_7_DAYS = "rolling7Days"
 
 
 class Agent(str, Enum):
@@ -36,6 +37,7 @@ class SampleType(str, Enum):
     DAILY = "daily"
     SESSION = "session"
     WEEKLY = "weekly"
+    ROLLING = "rolling"
 
 
 class UsageReporter:
@@ -57,6 +59,8 @@ class UsageReporter:
             return self._get_yesterday_sessions_data(agent)
         if query_type == QueryType.YESTERDAY_WORK_WEEK:
             return [self._get_yesterday_work_week_data(agent)]
+        if query_type == QueryType.ROLLING_7_DAYS:
+            return [self._get_rolling_7_days_data(agent)]
 
         raise ValueError(f"Unsupported query type: {query_type}")
 
@@ -139,16 +143,65 @@ class UsageReporter:
             **totals,
         }
 
+    def _get_rolling_7_days_data(self, agent: Agent) -> dict[str, Any]:
+        """Return one summarized usage row for the 7-day rolling window ending today."""
+        until_date = date.today()
+        since_date = until_date - timedelta(days=6)
+        since = since_date.isoformat()
+        until = until_date.isoformat()
+
+        raw_data = self._call_ccusage(agent.value, "daily", "--since", since, "--until", until)
+        totals = dict(raw_data.get("totals", {}))
+        self._normalize_cost(totals)
+
+        aggregated_models: dict[str, dict[str, Any]] = {}
+        for day in raw_data.get("daily", []):
+            day_models = day.get("models", {})
+            if not isinstance(day_models, dict):
+                continue
+            for model_name, model_data in day_models.items():
+                if not isinstance(model_data, dict):
+                    continue
+                bucket = aggregated_models.setdefault(model_name, {})
+                for field, value in model_data.items():
+                    if isinstance(value, Number) and not isinstance(value, bool):
+                        bucket[field] = bucket.get(field, 0) + value
+
+        credits = self._calculate_credits(aggregated_models)
+
+        limits = self.config.get("Limits", {})
+        cost_limit = limits.get("CostUSD")
+        used_pct = round(totals.get("cost", 0) / cost_limit * 100, 2) if cost_limit else None
+
+        return {
+            "user": self.config["UserEmail"],
+            "agent": agent.value,
+            "sample": SampleType.ROLLING.value,
+            "since": since,
+            "until": until,
+            "models": self._extract_models(raw_data.get("daily", [])),
+            "credits": credits,
+            "usedPercentage": used_pct,
+            **totals,
+        }
+
     def _get_yesterday_work_week_data(self, agent: Agent) -> dict[str, Any]:
         """Return one summarized usage row for the previous work day.
 
         Behaves like the yesterday query, but rolls weekend days back to the
         preceding Friday (e.g. on Monday it reports Friday's usage).
+        When the previous work day is Friday, Saturday and Sunday usage is
+        folded into the Friday row.
         """
-        previous_work_day = self._get_previous_work_day().isoformat()
-        raw_data = self._call_ccusage(
-            agent.value, "daily", "--since", previous_work_day, "--until", previous_work_day
-        )
+        previous_work_day = self._get_previous_work_day()
+        since = previous_work_day.isoformat()
+        # On Fridays, extend the window through Sunday to capture weekend usage
+        if previous_work_day.weekday() == 4:  # Friday
+            until = (previous_work_day + timedelta(days=2)).isoformat()
+        else:
+            until = since
+
+        raw_data = self._call_ccusage(agent.value, "daily", "--since", since, "--until", until)
 
         totals = dict(raw_data.get("totals", {}))
         self._normalize_cost(totals)
@@ -157,7 +210,7 @@ class UsageReporter:
             "user": self.config["UserEmail"],
             "agent": agent.value,
             "sample": SampleType.DAILY.value,
-            "date": previous_work_day,
+            "date": since,
             "models": self._extract_models(raw_data.get("daily", [])),
             **totals,
         }
@@ -241,6 +294,18 @@ class UsageReporter:
             results.append(row)
 
         return results
+
+    def _calculate_credits(self, aggregated_models: dict[str, dict[str, Any]]) -> float:
+        """Return estimated credit usage for the given aggregated per-model token counts."""
+        rates: dict[str, dict[str, float]] = self.config.get("CreditRates") or {}
+        total = 0.0
+        for model_name, model_data in aggregated_models.items():
+            model_rates = rates.get(model_name)
+            if model_rates is None or not isinstance(model_data, dict):
+                continue
+            for field, rate in model_rates.items():
+                total += (model_data.get(field, 0) / 1_000_000) * rate
+        return round(total, 4)
 
     @staticmethod
     def _get_previous_work_day() -> date:
