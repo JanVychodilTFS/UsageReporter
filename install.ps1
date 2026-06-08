@@ -1,6 +1,7 @@
 param(
     [string]$SourceBaseUrl = 'https://raw.githubusercontent.com/JanVychodilTFS/UsageReporter/main',
-    [string]$TaskName = 'UsageReporter'
+    [string]$TaskName = 'UsageReporter',
+    [switch]$Update
 )
 
 Set-StrictMode -Version Latest
@@ -9,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $DefaultInstallPath = Join-Path $env:LOCALAPPDATA 'UsageReporter'
 $DefaultCodexSettingsPath = '%USERPROFILE%\.codex'
 $InstallPathEnvVarName = 'USAGE_REPORTER_INSTALL_PATH'
-$ProjectFiles = @('usage_reporter.py', 'run.py', 'test.py', 'uninstall.ps1')
+$ProjectFiles = @('usage_reporter.py', 'run.py', 'test.py', 'uninstall.ps1', 'install.ps1')
 
 function Assert-CommandExists {
     param([string]$Name)
@@ -450,6 +451,42 @@ function Sync-ReporterTasks {
 }
 
 function Main {
+    if ($Update) {
+        Write-Host 'Updating UsageReporter...'
+
+        $storedPath = [Environment]::GetEnvironmentVariable($InstallPathEnvVarName, 'User')
+        $installPath = if (-not [string]::IsNullOrWhiteSpace($storedPath)) {
+            Expand-InstallPath -Path $storedPath
+        }
+        else {
+            $DefaultInstallPath
+        }
+
+        $installedConfigPath = Join-Path $installPath 'config.json'
+        $installedConfig = Read-JsonFile -Path $installedConfigPath
+        if ($null -eq $installedConfig) {
+            throw "No existing installation found at '$installPath'. Run without -Update to install."
+        }
+
+        foreach ($fileName in $ProjectFiles) {
+            Install-ProjectFile `
+                -FileName $fileName `
+                -InstallPath $installPath `
+                -SourceBaseUrl $SourceBaseUrl
+        }
+
+        $automationJobs = Get-AutomationJobsFromConfig -Config $installedConfig
+        Sync-ReporterTasks `
+            -TaskName $TaskName `
+            -InstallPath $installPath `
+            -Jobs $automationJobs
+
+        Write-Host ''
+        Write-Host 'Update complete.'
+        Write-Host "Install path: $installPath"
+        return
+    }
+
     Write-Host 'Checking prerequisites...'
     Assert-CommandExists -Name 'python'
     Assert-CommandExists -Name 'npx'

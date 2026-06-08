@@ -19,6 +19,20 @@ One-line GitHub install:
 irm https://raw.githubusercontent.com/JanVychodilTFS/UsageReporter/main/install.ps1 | iex
 ```
 
+## Update
+
+Re-download all files and re-sync scheduled tasks without touching your config:
+
+```powershell
+.\install.ps1 -Update
+```
+
+Or from GitHub (if `install.ps1` is already in the install folder):
+
+```powershell
+& "$env:LOCALAPPDATA\UsageReporter\install.ps1" -Update
+```
+
 ## Config
 
 Jobs live in `Automation.Jobs` in `config.json`. Each enabled job becomes a scheduled task `UsageReporter-<Id>` running `run.py <Id>`. Stale tasks are removed on re-install.
