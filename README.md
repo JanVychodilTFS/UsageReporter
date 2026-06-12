@@ -27,6 +27,12 @@ Re-download all files and re-sync scheduled tasks without touching your config:
 .\install.ps1 -Update
 ```
 
+One-line GitHub update (downloads the latest files from GitHub):
+
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/JanVychodilTFS/UsageReporter/main/install.ps1) } -Update"
+```
+
 ## Config
 
 Jobs live in `Automation.Jobs` in `config.json`. Each enabled job becomes a scheduled task `UsageReporter-<Id>` running `run.py <Id>`. Stale tasks are removed on re-install.
