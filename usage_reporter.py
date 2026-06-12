@@ -169,6 +169,16 @@ class UsageReporter:
 
         credits = self._calculate_credits(aggregated_models)
 
+        rates: dict[str, dict[str, float]] = self.config.get("CreditRates") or {}
+        models_detail = []
+        for model_name, model_data in sorted(aggregated_models.items()):
+            model_rates = rates.get(model_name)
+            model_credits = 0.0
+            if model_rates and isinstance(model_data, dict):
+                for field, rate in model_rates.items():
+                    model_credits += (model_data.get(field, 0) / 1_000_000) * rate
+            models_detail.append({"model": model_name, **model_data, "credits": round(model_credits, 4)})
+
         limits = self.config.get("Limits", {})
         cost_limit = limits.get("CostUSD")
         used_pct = round(totals.get("cost", 0) / cost_limit * 100, 2) if cost_limit else None
@@ -179,7 +189,7 @@ class UsageReporter:
             "sample": SampleType.ROLLING.value,
             "since": since,
             "until": until,
-            "models": self._extract_models(raw_data.get("daily", [])),
+            "models": models_detail,
             "credits": credits,
             "usedPercentage": used_pct,
             **totals,

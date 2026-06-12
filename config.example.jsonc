@@ -34,17 +34,21 @@
                 ]
             },
             {
-                "Id": "daily-sessions",
+                "Id": "daily-report",
                 "Enabled": true,
-                "ReadArchivedSessions": false,
-                // Cron expression - every day at 07:00
-                "Schedule": "0 7 * * *",
+                "ReadArchivedSessions": true,
+                // Cron expression - every day at 06:00
+                "Schedule": "0 6 * * *",
                 "TargetURL": "https://your-target-url-here",
                 "Data":
                 [
                     {
                         "Agent": "codex",
-                        "QueryType": "yesterdaySessions"
+                        "QueryType": "yesterdayWorkWeek"
+                    },
+                    {
+                        "Agent": "codex",
+                        "QueryType": "rolling7Days"
                     }
                 ]
             }
@@ -61,6 +65,11 @@
             "inputTokens": 62.5,
             "cachedInputTokens": 6.25,
             "outputTokens": 375.0
+        },
+        "gpt-5.4-mini": {
+            "inputTokens": 18.75,
+            "cachedInputTokens": 1.875,
+            "outputTokens": 113.0
         }
     }
 }
