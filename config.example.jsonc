@@ -53,23 +53,5 @@
                 ]
             }
         ]
-    },
-    // Credit rates per 1 000 000 tokens, keyed by model name.
-    "CreditRates": {
-        "gpt-5.5": {
-            "inputTokens": 125.0,
-            "cachedInputTokens": 12.5,
-            "outputTokens": 750.0
-        },
-        "gpt-5.4": {
-            "inputTokens": 62.5,
-            "cachedInputTokens": 6.25,
-            "outputTokens": 375.0
-        },
-        "gpt-5.4-mini": {
-            "inputTokens": 18.75,
-            "cachedInputTokens": 1.875,
-            "outputTokens": 113.0
-        }
     }
 }

@@ -14,6 +14,25 @@ from pathlib import Path
 from typing import Any
 
 
+CREDIT_RATES: dict[str, dict[str, float]] = {
+    "gpt-5.5": {
+        "inputTokens": 125.0,
+        "cachedInputTokens": 12.5,
+        "outputTokens": 750.0,
+    },
+    "gpt-5.4": {
+        "inputTokens": 62.5,
+        "cachedInputTokens": 6.25,
+        "outputTokens": 375.0,
+    },
+    "gpt-5.4-mini": {
+        "inputTokens": 18.75,
+        "cachedInputTokens": 1.875,
+        "outputTokens": 113.0,
+    },
+}
+
+
 class QueryType(str, Enum):
     """Supported usage report queries."""
 
@@ -169,7 +188,7 @@ class UsageReporter:
 
         credits = self._calculate_credits(aggregated_models)
 
-        rates: dict[str, dict[str, float]] = self.config.get("CreditRates") or {}
+        rates = CREDIT_RATES
         models_detail = []
         for model_name, model_data in sorted(aggregated_models.items()):
             model_rates = rates.get(model_name)
@@ -307,7 +326,7 @@ class UsageReporter:
 
     def _calculate_credits(self, aggregated_models: dict[str, dict[str, Any]]) -> float:
         """Return estimated credit usage for the given aggregated per-model token counts."""
-        rates: dict[str, dict[str, float]] = self.config.get("CreditRates") or {}
+        rates = CREDIT_RATES
         total = 0.0
         for model_name, model_data in aggregated_models.items():
             model_rates = rates.get(model_name)
