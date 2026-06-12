@@ -211,7 +211,8 @@ function Install-ProjectFile {
     param(
         [string]$FileName,
         [string]$InstallPath,
-        [string]$SourceBaseUrl
+        [string]$SourceBaseUrl,
+        [switch]$ForceRemote
     )
 
     $destination = Join-Path $InstallPath $FileName
@@ -222,7 +223,7 @@ function Install-ProjectFile {
         Join-Path $PSScriptRoot $FileName
     }
 
-    if ($localSource -and (Test-Path -LiteralPath $localSource)) {
+    if (-not $ForceRemote -and $localSource -and (Test-Path -LiteralPath $localSource)) {
         if ((Test-Path -LiteralPath $destination) -and
             ((Resolve-Path -LiteralPath $localSource).Path -eq (Resolve-Path -LiteralPath $destination).Path)) {
             return
@@ -466,11 +467,14 @@ function Main {
             throw "No existing installation found at '$installPath'. Run without -Update to install."
         }
 
+        # Always fetch fresh files from the source URL so an in-place update
+        # (run from the install folder) does not skip files as no-ops.
         foreach ($fileName in $ProjectFiles) {
             Install-ProjectFile `
                 -FileName $fileName `
                 -InstallPath $installPath `
-                -SourceBaseUrl $SourceBaseUrl
+                -SourceBaseUrl $SourceBaseUrl `
+                -ForceRemote
         }
 
         $automationJobs = Get-AutomationJobsFromConfig -Config $installedConfig
