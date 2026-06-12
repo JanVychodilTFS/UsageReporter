@@ -367,13 +367,11 @@ function Register-ReporterTask {
     )
 
     $trigger = New-TriggerFromCronSchedule -Schedule $Schedule
-    $logPath = Join-Path $InstallPath "logs\run-$JobId.log"
     $runScriptPath = Join-Path $InstallPath 'run.py'
     $installPathLiteral = ConvertTo-PowerShellStringLiteral -Value $InstallPath
     $runScriptLiteral = ConvertTo-PowerShellStringLiteral -Value $runScriptPath
     $jobIdLiteral = ConvertTo-PowerShellStringLiteral -Value $JobId
-    $logPathLiteral = ConvertTo-PowerShellStringLiteral -Value $logPath
-    $taskCommand = "& { Set-Location -LiteralPath $installPathLiteral; python $runScriptLiteral $jobIdLiteral *>> $logPathLiteral }"
+    $taskCommand = "& { Set-Location -LiteralPath $installPathLiteral; python $runScriptLiteral $jobIdLiteral }"
     $action = New-ScheduledTaskAction `
         -Execute 'powershell.exe' `
         -Argument "-NoProfile -ExecutionPolicy Bypass -Command `"$taskCommand`""
@@ -614,7 +612,7 @@ function Main {
     Write-Host "Install path: $installPath"
     Write-Host "Install path env var: $InstallPathEnvVarName"
     Write-Host "Config path: $configPath"
-    Write-Host "Log path: $(Join-Path $installPath 'logs\run-<job-id>.log')"
+    Write-Host "Log path: $(Join-Path $installPath 'logs\run.log')"
     Write-Host "Manual run: python `"$((Join-Path $installPath 'run.py'))`" <job-id> [<job-id> ...]"
     Write-Host "Task check: Get-ScheduledTask -TaskName '$TaskName-*'"
 }

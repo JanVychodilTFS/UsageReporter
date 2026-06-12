@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from argparse import ArgumentParser
 from collections.abc import Callable
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 from urllib import request
@@ -15,6 +17,37 @@ ReportPayload = dict[str, Any]
 ReportOutputHandler = Callable[[str, ReportPayload], str]
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
+LOG_DIR = Path(__file__).with_name("logs")
+LOG_PATH = LOG_DIR / "run.log"
+
+logger = logging.getLogger("usage_reporter.run")
+
+
+def configure_logging() -> None:
+    """Configure logging to both the console and a rotating log file."""
+    root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
+
+    root_logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        "%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    file_handler = RotatingFileHandler(
+        LOG_PATH,
+        maxBytes=1_000_000,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
 
 
 def load_config() -> dict[str, Any]:
@@ -25,8 +58,16 @@ def load_config() -> dict[str, Any]:
 
 def main() -> None:
     """Run automation script and send results to the configured target URL."""
-    for job_id in parse_job_ids():
-        run_configured_report(send_to_target, job_id=job_id)
+    configure_logging()
+    job_ids = parse_job_ids()
+    logger.info("Starting usage report run for jobs: %s", ", ".join(job_ids))
+    for job_id in job_ids:
+        try:
+            run_configured_report(send_to_target, job_id=job_id)
+        except Exception:
+            logger.exception("Automation job '%s' failed.", job_id)
+            raise
+    logger.info("Completed usage report run.")
 
 
 def parse_job_ids(description: str | None = None) -> list[str]:
@@ -48,12 +89,16 @@ def run_configured_report(output_handler: ReportOutputHandler,job_id: str,) -> N
     job = select_automation_job(automation, job_id)
 
     if not job["Enabled"]:
-        print(f"Automation job '{job['Id']}' is disabled.")
+        logger.info("Automation job '%s' is disabled.", job["Id"])
         return
 
-    payload = build_payload(job["Id"], collect_report_data(config, job))
+    logger.info("Running automation job '%s'.", job["Id"])
+    data = collect_report_data(config, job)
+    logger.info("Collected %d report row(s) for job '%s'.", len(data), job["Id"])
+    payload = build_payload(job["Id"], data)
+    logger.info("Sending report for job '%s' to target.", job["Id"])
     output_text = output_handler(job["TargetURL"], payload)
-    print(output_text)
+    logger.info("Target response for job '%s': %s", job["Id"], output_text)
 
 
 def select_automation_job(automation: dict[str, Any],job_id: str,) -> dict[str, Any]:
