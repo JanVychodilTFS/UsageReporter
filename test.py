@@ -37,7 +37,9 @@ def parse_optional_job_ids() -> list[str]:
 
 def format_payload(_target_url: str, payload: ReportPayload) -> str:
     """Format a report payload without sending it anywhere."""
-    return json.dumps(payload, indent=2)
+    formatted = json.dumps(payload, indent=2)
+    print(formatted)
+    return formatted
 
 
 if __name__ == "__main__":
