@@ -11,6 +11,11 @@ $DefaultInstallPath = Join-Path $env:LOCALAPPDATA 'UsageReporter'
 $DefaultCodexSettingsPath = '%USERPROFILE%\.codex'
 $InstallPathEnvVarName = 'USAGE_REPORTER_INSTALL_PATH'
 $ProjectFiles = @('usage_reporter.py', 'run.py', 'test.py', 'uninstall.ps1', 'install.ps1')
+$DefaultLimits = [ordered]@{
+    CostUSD = 50
+    Credits = 1250
+}
+$RequiredConfigFields = @('UserEmail', 'InstallationPath', 'CodexSettingsPath')
 
 function Assert-CommandExists {
     param([string]$Name)
@@ -256,6 +261,55 @@ function Get-DefaultAutomationData {
     )
 }
 
+function Get-NormalizedLimits {
+    param($Limits)
+
+    $result = [ordered]@{}
+    foreach ($field in $DefaultLimits.Keys) {
+        $result[$field] = Get-ObjectPropertyValue -Object $Limits -Name $field -Default $DefaultLimits[$field]
+    }
+
+    return [pscustomobject]$result
+}
+
+function Assert-RequiredConfigFields {
+    param($Config)
+
+    foreach ($name in $RequiredConfigFields) {
+        $value = Get-ObjectPropertyValue -Object $Config -Name $name
+        if ([string]::IsNullOrWhiteSpace([string]$value)) {
+            Write-Warning "Config is missing required field '$name'."
+        }
+    }
+}
+
+function Repair-ReporterConfig {
+    param($Config)
+
+    $changed = $false
+
+    $limits = Get-ObjectPropertyValue -Object $Config -Name 'Limits'
+    if ($null -eq $limits) {
+        $Config | Add-Member -NotePropertyName 'Limits' -NotePropertyValue (Get-NormalizedLimits) -Force
+        $changed = $true
+        Write-Host "Config was missing 'Limits'; added defaults (CostUSD=$($DefaultLimits['CostUSD']), Credits=$($DefaultLimits['Credits']))."
+    }
+    else {
+        foreach ($field in $DefaultLimits.Keys) {
+            if ($null -eq (Get-ObjectPropertyValue -Object $limits -Name $field)) {
+                $limits | Add-Member -NotePropertyName $field -NotePropertyValue $DefaultLimits[$field] -Force
+                $changed = $true
+                Write-Host "Config 'Limits' was missing '$field'; set to default $($DefaultLimits[$field])."
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Config = $Config
+        Changed = $changed
+    }
+}
+
 function Test-HasAutomationJobs {
     param($Config)
 
@@ -342,6 +396,7 @@ function Write-ReporterConfig {
         [string]$UserEmail,
         [string]$InstallationPath,
         [string]$CodexSettingsPath,
+        $Limits,
         $Jobs
     )
 
@@ -349,9 +404,14 @@ function Write-ReporterConfig {
         UserEmail = $UserEmail
         InstallationPath = $InstallationPath
         CodexSettingsPath = $CodexSettingsPath
-        Automation = [ordered]@{
-            Jobs = @($Jobs)
-        }
+    }
+
+    if ($null -ne $Limits) {
+        $config['Limits'] = $Limits
+    }
+
+    $config['Automation'] = [ordered]@{
+        Jobs = @($Jobs)
     }
 
     $config |
@@ -466,6 +526,16 @@ function Main {
         if ($null -eq $installedConfig) {
             throw "No existing installation found at '$installPath'. Run without -Update to install."
         }
+
+        Assert-RequiredConfigFields -Config $installedConfig
+        $repair = Repair-ReporterConfig -Config $installedConfig
+        if ($repair.Changed) {
+            $repair.Config |
+                ConvertTo-Json -Depth 10 |
+                Set-Content -LiteralPath $installedConfigPath -Encoding UTF8
+            Write-Host "Config updated with missing fields: $installedConfigPath"
+        }
+        $installedConfig = $repair.Config
 
         # Always fetch fresh files from the source URL so an in-place update
         # (run from the install folder) does not skip files as no-ops.
@@ -594,12 +664,15 @@ function Main {
             -SourceBaseUrl $SourceBaseUrl
     }
 
+    $limits = Get-NormalizedLimits -Limits (Get-ObjectPropertyValue -Object $defaultConfig -Name 'Limits')
+
     $configPath = Join-Path $installPath 'config.json'
     Write-ReporterConfig `
         -ConfigPath $configPath `
         -UserEmail $userEmail `
         -InstallationPath $installPath `
         -CodexSettingsPath $codexSettingsPath `
+        -Limits $limits `
         -Jobs $automationJobs
 
     Sync-ReporterTasks `
